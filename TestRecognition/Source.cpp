@@ -103,6 +103,7 @@ Mat asRowMatrix(const vector<Mat>& src, int rtype, double alpha = 1, double beta
 		}
 		// Get a hold of the current row:
 		Mat xi = data.row(i);
+		
 		// Make reshape happy by cloning for non-continuous matrices:
 		if (src[i].isContinuous()) {
 			src[i].reshape(1, 1).convertTo(xi, rtype, alpha, beta);
@@ -154,7 +155,7 @@ PCA load(const string &file_name, cv::PCA pca_)
 
 Mat detectFace(Mat im, Mat& frame)
 {
-	std::vector<Rect> faces, eyes;
+	std::vector<Rect> faces;
 	face_cascade.detectMultiScale(im, faces, 1.1, 2, 0 | CV_HAAR_SCALE_IMAGE, Size(30, 30));
 
 	for (int i = 0; i < faces.size(); i++)
@@ -167,14 +168,13 @@ Mat detectFace(Mat im, Mat& frame)
 }
 string getEmotion(int ans) {
 	switch (ans) {
-	case 0:return "neutral";
-	case 1:return "anger";
-	case 2:return "contempt";
-	case 3:return "disgust";
-	case 4:return "fear";
-	case 5:return "happy";
-	case 6:return "sad";
-	case 7:return "surprise";
+	//case 0:return "neutral";
+	case 0:return "anger";
+	case 1:return "disgust";
+	case 2:return "fear";
+	case 3:return "happy";
+	case 4:return "sad";
+	case 5:return "surprise";
 	default:return"nothing";
 	}
 }
@@ -194,11 +194,12 @@ void recognizeEmotion(Mat f, PCA& pca, int num_components, Ptr<SVM>& svm,vector<
 		//resize(frame, frame, s);
 		//frame = frame.reshape(1, 1);
 		frame.convertTo(frame, CV_32FC1);
-		cout << "input frame length: " << frame.rows << "--" << frame.cols << endl;
+		//cout << "input frame length: " << frame.rows << "--" << frame.cols << endl;
 		pca.project(frame, re);
-
+		//imshow("avg", re.reshape(1, db[0].));
+		imshow("pc1", norm_0_255(pca.eigenvectors.row(pca.eigenvectors.rows-1)).reshape(1, db[0].rows));
 		int ans = svm->predict(re);
-		cout << i<<" This photo is person " << getEmotion(ans) << endl;
+		cout << i << " This photo is person " << ans << endl;//getEmotion(ans) << endl;
 	}
 	
 }
@@ -217,6 +218,10 @@ void generatePCA(PCA&pca, vector<Mat>db,int num_components,Mat& data, Mat& eigen
 	save("pca.xml", mean, eigenvalues, eigenvectors);
 }
 int main(int argc, const char *argv[]) {
+	if (!face_cascade.load(face_cascade_name)) {
+		printf("--(!)Error loading\n");
+		return (-1);
+	}
 	// Holds some images:
 	vector<Mat> db;
 
@@ -238,6 +243,7 @@ int main(int argc, const char *argv[]) {
 	Mat eigenStuff(data.rows, num_components, CV_32FC1); //This Mat will contain all the Eigenfaces that will be used later with SVM for detection
 	//cout << "rows" << data.rows << "eigenCol" << eigenStuff.cols << endl;
 	generatePCA(pca, db, num_components, data, eigenStuff);
+	
 	//pca = load("pca.xml", pca);
 	// The mean face:
 	//imshow("avg", norm_0_255(mean.reshape(1, db[0].rows)));
@@ -250,22 +256,22 @@ int main(int argc, const char *argv[]) {
 	
 	//cout << "matrix row "<<labelsMatrix.rows << endl;
 	TrainSVM(svm, eigenStuff, labelsMatrix, pca);
-	//svm->save("emotionRecognition.xml");
+	svm->save("emotionRecognition.xml");
 
-	//VideoCapture cap(0);
-	//if (!cap.isOpened()) {
-	//	return -1;
-	//}
+	VideoCapture cap(0);
+	if (!cap.isOpened()) {
+		return -1;
+	}
 
 	//Mat imgs = asRowMatrix(db, CV_32FC1);
-	//while (true) {
-	//	Mat frame;
-	//	cap >> frame;
+	while (waitKey(15) != 'q') {
+		Mat frame;
+		
+		cap >> frame;
 
-
-		//Size s(200, 200);
-		//resize(frame, frame, s);
-		//cvtColor(frame, frame, CV_BGR2GRAY);
+		if (frame.empty()) break;
+		cvtColor(frame, frame, CV_BGR2GRAY);
+		equalizeHist(frame,frame);
 		//frame = frame.reshape(1, 1);
 		//imgs.push_back(inp);
 		//frame.convertTo(frame, CV_32F);
@@ -274,14 +280,15 @@ int main(int argc, const char *argv[]) {
 		//{
 			//Mat temp = asRowMatrix(imgs, CV_32F);
 			//cout << temp.rows << "--tempRows--" << pca.eigenvalues.rows;
-	Mat frame = imread("S010_001_00000001.png");
-	recognizeEmotion(frame, pca, num_components,svm,db);
+	//Mat frame = imread("S010_001_00000001.png");
+		frame=detectFace(frame,frame);
+	//recognizeEmotion(frame, pca, num_components,svm,db);
 	//}
 
-//	imshow("video", frame);
+	imshow("final", frame);
 
 
-//}
+}
 	//cout <<re.cols << "and" << endl;
 	
 	
