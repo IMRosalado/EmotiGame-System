@@ -178,27 +178,44 @@ string getEmotion(int ans) {
 	default:return"nothing";
 	}
 }
-void recognizeEmotion(Mat f, PCA& pca, int num_components, Ptr<SVM>& svm) {
+void recognizeEmotion(Mat f, PCA& pca, int num_components, Ptr<SVM>& svm,vector<Mat> db) {
 	Mat re(1, num_components, CV_32FC1);
 	
 	vector<Mat> temp;
 	temp.push_back(f);
-	Mat frameMatrix = asRowMatrix(temp, CV_32FC1);
-	Mat frame = frameMatrix.row(0);
-	if (frame.empty())
-		cout << "EMPTY--------------------" << endl;
-	imshow("frame", frame);
-	//Size s(200, 200);
-	//resize(frame, frame, s);
-	//frame = frame.reshape(1, 1);
-	frame.convertTo(frame, CV_32FC1);
-	cout << "input frame length: " << frame.rows<<"--"<<frame.cols<< endl;
-	pca.project(frame, re);
-	
-	int ans = svm->predict(re);
-	cout << " This photo is person " << getEmotion(ans) << endl;
-}
+	Mat frameMatrix = asRowMatrix(db, CV_32FC1);
+	for (int i = 0; i < frameMatrix.rows; i++)
+	{
+		Mat frame = frameMatrix.row(i);
+		if (frame.empty())
+			cout << "EMPTY--------------------" << endl;
 
+		//Size s(200, 200);
+		//resize(frame, frame, s);
+		//frame = frame.reshape(1, 1);
+		frame.convertTo(frame, CV_32FC1);
+		cout << "input frame length: " << frame.rows << "--" << frame.cols << endl;
+		pca.project(frame, re);
+
+		int ans = svm->predict(re);
+		cout << i<<" This photo is person " << getEmotion(ans) << endl;
+	}
+	
+}
+void generatePCA(PCA&pca, vector<Mat>db,int num_components,Mat& data, Mat& eigenStuff) {
+	for (int i = 0; i < db.size(); i++) {
+		Mat projectedMat(1, num_components, CV_32FC1);
+		//cout << "image(" << i << ")" << data.row(i).cols << endl;
+		pca.project(data.row(i), projectedMat);
+		projectedMat.row(0).copyTo(eigenStuff.row(i));
+	}
+
+	// And copy the PCA results:
+	Mat mean = pca.mean.clone();
+	Mat eigenvalues = pca.eigenvalues.clone();
+	Mat eigenvectors = pca.eigenvectors.clone();
+	save("pca.xml", mean, eigenvalues, eigenvectors);
+}
 int main(int argc, const char *argv[]) {
 	// Holds some images:
 	vector<Mat> db;
@@ -214,22 +231,14 @@ int main(int argc, const char *argv[]) {
 
 	// Perform a PCA:
 	PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, num_components);
-
+	Ptr<SVM> svm;
+	//svm->setType(SVM::C_SVC);
+	//svm->setKernel(SVM::LINEAR);
+	//cout << "----SVM:"<<svm->SVM::getKernelType() << endl;
 	Mat eigenStuff(data.rows, num_components, CV_32FC1); //This Mat will contain all the Eigenfaces that will be used later with SVM for detection
 	//cout << "rows" << data.rows << "eigenCol" << eigenStuff.cols << endl;
-	for (int i = 0; i < db.size(); i++) {
-		Mat projectedMat(1, num_components, CV_32FC1);
-		//cout << "image(" << i << ")" << data.row(i).cols << endl;
-		pca.project(data.row(i), projectedMat);
-		projectedMat.row(0).copyTo(eigenStuff.row(i));
-	}
-
-	// And copy the PCA results:
-	Mat mean = pca.mean.clone();
-	Mat eigenvalues = pca.eigenvalues.clone();
-	Mat eigenvectors = pca.eigenvectors.clone();
-	save("pca.xml", mean,eigenvalues,eigenvectors);
-	pca = load("pca.xml", pca);
+	generatePCA(pca, db, num_components, data, eigenStuff);
+	//pca = load("pca.xml", pca);
 	// The mean face:
 	//imshow("avg", norm_0_255(mean.reshape(1, db[0].rows)));
 	//cout << "number: "<< eigenvalues.rows<<endl;
@@ -238,7 +247,7 @@ int main(int argc, const char *argv[]) {
 
 	//create svm
 	Mat labelsMatrix(labels, true);
-	Ptr<SVM> svm;
+	
 	//cout << "matrix row "<<labelsMatrix.rows << endl;
 	TrainSVM(svm, eigenStuff, labelsMatrix, pca);
 	//svm->save("emotionRecognition.xml");
@@ -266,7 +275,7 @@ int main(int argc, const char *argv[]) {
 			//Mat temp = asRowMatrix(imgs, CV_32F);
 			//cout << temp.rows << "--tempRows--" << pca.eigenvalues.rows;
 	Mat frame = imread("S010_001_00000001.png");
-	recognizeEmotion(frame, pca, num_components,svm);
+	recognizeEmotion(frame, pca, num_components,svm,db);
 	//}
 
 //	imshow("video", frame);
