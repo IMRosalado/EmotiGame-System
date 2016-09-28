@@ -25,6 +25,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <ctime>
 
 using namespace cv;
 using namespace std;
@@ -32,6 +33,7 @@ using namespace ml;
 
 string face_cascade_name = "C:/OpenCV/opencv/sources/data/haarcascades/haarcascade_frontalface_alt2.xml";
 CascadeClassifier face_cascade;
+bool detected = false;
 
 // Reads the images and labels from a given CSV file, a valid file would
 // look like this:
@@ -153,16 +155,30 @@ PCA load(const string &file_name, cv::PCA pca_)
 	return pca_;
 }
 
-Mat detectFace(Mat im, Mat& frame)
+Mat detectFace(Mat im, Mat frame, Mat& cropped)
 {
 	std::vector<Rect> faces;
 	face_cascade.detectMultiScale(im, faces, 1.1, 2, 0 | CV_HAAR_SCALE_IMAGE, Size(30, 30));
-
+	Rect largest;
 	for (int i = 0; i < faces.size(); i++)
 	{
-		Point center(faces[i].x + faces[i].width*0.5, faces[i].y + faces[i].height*0.5);
-		ellipse(frame, center, Size(faces[i].width*0.5, faces[i].height*0.5), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
+		if (faces[i].area() > largest.area())
+			largest = faces[i];
+		//Point center(faces[i].x + faces[i].width*0.5, faces[i].y + faces[i].height*0.5);
+		//ellipse(frame, center, Size(faces[i].width*0.5, faces[i].height*0.5), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
 	}
+	if (faces.size() == 0)
+		return frame;
+	Point center(largest.x + largest.width*0.5, largest.y + largest.height*0.5);
+	ellipse(frame, center, Size(largest.width*0.5, largest.height*0.5), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
+
+	Mat crop = frame(largest);
+	Size s(200, 200);
+	resize(crop, crop, s);	imshow("cropped", crop);
+	cropped = crop;
+	//Point pt1(largest.x, largest.y); // Display detected faces on main window - live stream from camera
+	//Point pt2((largest.x + largest.height), (largest.y + largest.width));
+	//rectangle(frame, pt1, pt2, Scalar(0, 255, 0), 2, 8, 0);
 
 	return frame;
 }
@@ -197,9 +213,10 @@ void recognizeEmotion(Mat f, PCA& pca, int num_components, Ptr<SVM>& svm,vector<
 		//cout << "input frame length: " << frame.rows << "--" << frame.cols << endl;
 		pca.project(frame, re);
 		//imshow("avg", re.reshape(1, db[0].));
-		imshow("pc1", norm_0_255(pca.eigenvectors.row(pca.eigenvectors.rows-1)).reshape(1, db[0].rows));
+		//imshow("pc1", norm_0_255(pca.eigenvectors.row(pca.eigenvectors.rows-1)).reshape(1, db[0].rows));
 		int ans = svm->predict(re);
 		cout << i << " This photo is person " << ans << endl;//getEmotion(ans) << endl;
+		detected = false;
 	}
 	
 }
@@ -242,9 +259,9 @@ int main(int argc, const char *argv[]) {
 	//cout << "----SVM:"<<svm->SVM::getKernelType() << endl;
 	Mat eigenStuff(data.rows, num_components, CV_32FC1); //This Mat will contain all the Eigenfaces that will be used later with SVM for detection
 	//cout << "rows" << data.rows << "eigenCol" << eigenStuff.cols << endl;
-	generatePCA(pca, db, num_components, data, eigenStuff);
+	//generatePCA(pca, db, num_components, data, eigenStuff);
 	
-	//pca = load("pca.xml", pca);
+	pca = load("pca.xml", pca);
 	// The mean face:
 	//imshow("avg", norm_0_255(mean.reshape(1, db[0].rows)));
 	//cout << "number: "<< eigenvalues.rows<<endl;
@@ -262,7 +279,7 @@ int main(int argc, const char *argv[]) {
 	if (!cap.isOpened()) {
 		return -1;
 	}
-
+	clock_t start = clock(); cout << clock()/CLOCKS_PER_SEC<< endl;
 	//Mat imgs = asRowMatrix(db, CV_32FC1);
 	while (waitKey(15) != 'q') {
 		Mat frame;
@@ -280,9 +297,20 @@ int main(int argc, const char *argv[]) {
 		//{
 			//Mat temp = asRowMatrix(imgs, CV_32F);
 			//cout << temp.rows << "--tempRows--" << pca.eigenvalues.rows;
-	//Mat frame = imread("S010_001_00000001.png");
-		frame=detectFace(frame,frame);
-	//recognizeEmotion(frame, pca, num_components,svm,db);
+	//Mat frame = imread("S010_001_00000001.png");'
+		Mat cropped;
+		cout << "cropsize" << cropped.size() << endl;
+		frame=detectFace(frame,frame,cropped);
+		int deltaTime = (clock() / CLOCKS_PER_SEC - start/ CLOCKS_PER_SEC) ;
+		if (deltaTime%3==0 && !detected) {
+			detected = true;
+			cout << deltaTime << endl;
+			if (cropped.rows != 0)
+				recognizeEmotion(cropped, pca, num_components, svm, db);
+			else
+				cout << "no face" << endl;
+		}
+		
 	//}
 
 	imshow("final", frame);
