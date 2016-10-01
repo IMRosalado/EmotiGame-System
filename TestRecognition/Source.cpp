@@ -169,13 +169,16 @@ Mat detectFace(Mat im, Mat frame, Mat& cropped)
 	}
 	if (faces.size() == 0)
 		return frame;
-	Point center(largest.x + largest.width*0.5, largest.y + largest.height*0.5);
-	ellipse(frame, center, Size(largest.width*0.5, largest.height*0.5), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
 
 	Mat crop = frame(largest);
 	Size s(200, 200);
-	resize(crop, crop, s);	imshow("cropped", crop);
+	resize(crop, crop, s);
 	cropped = crop;
+
+	Point center(largest.x + largest.width*0.5, largest.y + largest.height*0.5);
+	ellipse(frame, center, Size(largest.width*0.5, largest.height*0.5), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
+
+	
 	//Point pt1(largest.x, largest.y); // Display detected faces on main window - live stream from camera
 	//Point pt2((largest.x + largest.height), (largest.y + largest.width));
 	//rectangle(frame, pt1, pt2, Scalar(0, 255, 0), 2, 8, 0);
@@ -184,13 +187,13 @@ Mat detectFace(Mat im, Mat frame, Mat& cropped)
 }
 string getEmotion(int ans) {
 	switch (ans) {
-	//case 0:return "neutral";
-	case 0:return "anger";
-	case 1:return "disgust";
-	case 2:return "fear";
-	case 3:return "happy";
-	case 4:return "sad";
-	case 5:return "surprise";
+	case 0:return "neutral";
+	case 1:return "anger";
+	case 2:return "disgust";
+	case 3:return "fear";
+	case 4:return "happy";
+	case 5:return "sad";
+	case 6:return "surprise";
 	default:return"nothing";
 	}
 }
@@ -199,13 +202,13 @@ void recognizeEmotion(Mat f, PCA& pca, int num_components, Ptr<SVM>& svm,vector<
 	
 	vector<Mat> temp;
 	temp.push_back(f);
-	Mat frameMatrix = asRowMatrix(db, CV_32FC1);
+	Mat frameMatrix = asRowMatrix(temp, CV_32FC1);
 	for (int i = 0; i < frameMatrix.rows; i++)
 	{
+		
 		Mat frame = frameMatrix.row(i);
 		if (frame.empty())
 			cout << "EMPTY--------------------" << endl;
-
 		//Size s(200, 200);
 		//resize(frame, frame, s);
 		//frame = frame.reshape(1, 1);
@@ -215,8 +218,8 @@ void recognizeEmotion(Mat f, PCA& pca, int num_components, Ptr<SVM>& svm,vector<
 		//imshow("avg", re.reshape(1, db[0].));
 		//imshow("pc1", norm_0_255(pca.eigenvectors.row(pca.eigenvectors.rows-1)).reshape(1, db[0].rows));
 		int ans = svm->predict(re);
-		cout << i << " This photo is person " << ans << endl;//getEmotion(ans) << endl;
-		detected = false;
+		cout << i << " This photo is person " << getEmotion(ans) << endl;
+		
 	}
 	
 }
@@ -247,7 +250,7 @@ int main(int argc, const char *argv[]) {
 
 	// Build a matrix with the observations in row:
 	Mat data = asRowMatrix(db, CV_32FC1);
-
+	cout << "data col" << data.cols << endl;
 	// Number of components to keep for the PCA:
 	int num_components = 20;
 
@@ -259,9 +262,9 @@ int main(int argc, const char *argv[]) {
 	//cout << "----SVM:"<<svm->SVM::getKernelType() << endl;
 	Mat eigenStuff(data.rows, num_components, CV_32FC1); //This Mat will contain all the Eigenfaces that will be used later with SVM for detection
 	//cout << "rows" << data.rows << "eigenCol" << eigenStuff.cols << endl;
-	//generatePCA(pca, db, num_components, data, eigenStuff);
+	generatePCA(pca, db, num_components, data, eigenStuff);
 	
-	pca = load("pca.xml", pca);
+	//pca = load("pca.xml", pca);
 	// The mean face:
 	//imshow("avg", norm_0_255(mean.reshape(1, db[0].rows)));
 	//cout << "number: "<< eigenvalues.rows<<endl;
@@ -286,37 +289,45 @@ int main(int argc, const char *argv[]) {
 		
 		cap >> frame;
 
-		if (frame.empty()) break;
-		cvtColor(frame, frame, CV_BGR2GRAY);
-		equalizeHist(frame,frame);
-		//frame = frame.reshape(1, 1);
-		//imgs.push_back(inp);
-		//frame.convertTo(frame, CV_32F);
-		//Mat face = detectFace(frame);
-		//for (int i = 110; i < 115; i++)
-		//{
+		if (!frame.empty()) {
+			cvtColor(frame, frame, CV_BGR2GRAY);
+			equalizeHist(frame, frame);
+			//frame = frame.reshape(1, 1);
+			//imgs.push_back(inp);
+			//frame.convertTo(frame, CV_32F);
+			//Mat face = detectFace(frame);
+			//for (int i = 110; i < 115; i++)
+			//{
 			//Mat temp = asRowMatrix(imgs, CV_32F);
 			//cout << temp.rows << "--tempRows--" << pca.eigenvalues.rows;
-	//Mat frame = imread("S010_001_00000001.png");'
-		Mat cropped;
-		cout << "cropsize" << cropped.size() << endl;
-		frame=detectFace(frame,frame,cropped);
-		int deltaTime = (clock() / CLOCKS_PER_SEC - start/ CLOCKS_PER_SEC) ;
-		if (deltaTime%3==0 && !detected) {
-			detected = true;
-			cout << deltaTime << endl;
-			if (cropped.rows != 0)
+			//Mat frame = imread("S010_001_00000001.png");'
+			Mat cropped;
+			//cout << "cropsize" << cropped.size() << endl;
+			frame = detectFace(frame, frame, cropped);
+			
+			if (!cropped.empty()) {
+				imshow("cr", cropped);
 				recognizeEmotion(cropped, pca, num_components, svm, db);
-			else
-				cout << "no face" << endl;
+			}
+			
+			//int deltaTime = (clock() / CLOCKS_PER_SEC - start/ CLOCKS_PER_SEC) ;
+			//if (deltaTime%3==0  ) {
+				//detected = true;
+				//cout << deltaTime << endl;
+				//if (!cropped.empty())
+				//	recognizeEmotion(cropped, pca, num_components, svm, db);
+				//else
+				//	cout << "no face" << endl;
+			//}
+
+			
+
+			imshow("final", frame);
 		}
 		
-	//}
-
-	imshow("final", frame);
 
 
-}
+	}
 	//cout <<re.cols << "and" << endl;
 	
 	
