@@ -170,13 +170,18 @@ Mat detectFace(Mat im, Mat frame, Mat& cropped)
 	if (faces.size() == 0)
 		return frame;
 
+	Size deltaSize(largest.width * 0.2f, largest.height * 0.2f); // 0.1f = 10/100
+	Point offset(deltaSize.width / 2, deltaSize.height / 2);
+	largest -= deltaSize;
+	largest += offset;
+
 	Mat crop = frame(largest);
 	Size s(200, 200);
 	resize(crop, crop, s);
 	cropped = crop;
 
 	Point center(largest.x + largest.width*0.5, largest.y + largest.height*0.5);
-	ellipse(frame, center, Size(largest.width*0.5, largest.height*0.5), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
+	rectangle(frame, largest, Scalar(255, 0, 255), 4, 8, 0); //Size(largest.width*0.5, largest.height*0.5), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
 
 	
 	//Point pt1(largest.x, largest.y); // Display detected faces on main window - live stream from camera
@@ -187,13 +192,13 @@ Mat detectFace(Mat im, Mat frame, Mat& cropped)
 }
 string getEmotion(int ans) {
 	switch (ans) {
-	case 0:return "neutral";
-	case 1:return "anger";
-	case 2:return "disgust";
-	case 3:return "fear";
-	case 4:return "happy";
-	case 5:return "sad";
-	case 6:return "surprise";
+	case 7:return "neutral";
+	case 0:return "anger";
+	case 1:return "disgust";
+	case 2:return "fear";
+	case 3:return "happy";
+	case 4:return "sad";
+	case 5:return "surprise";
 	default:return"nothing";
 	}
 }
@@ -252,7 +257,7 @@ int main(int argc, const char *argv[]) {
 	Mat data = asRowMatrix(db, CV_32FC1);
 	cout << "data col" << data.cols << endl;
 	// Number of components to keep for the PCA:
-	int num_components = 20;
+	int num_components = 10;
 
 	// Perform a PCA:
 	PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, num_components);
@@ -261,9 +266,10 @@ int main(int argc, const char *argv[]) {
 	//svm->setKernel(SVM::LINEAR);
 	//cout << "----SVM:"<<svm->SVM::getKernelType() << endl;
 	Mat eigenStuff(data.rows, num_components, CV_32FC1); //This Mat will contain all the Eigenfaces that will be used later with SVM for detection
+	cout << eigenStuff.rows << " rows" << endl;
 	//cout << "rows" << data.rows << "eigenCol" << eigenStuff.cols << endl;
 	generatePCA(pca, db, num_components, data, eigenStuff);
-	
+	cout << eigenStuff.rows <<" rows"<< endl;
 	//pca = load("pca.xml", pca);
 	// The mean face:
 	//imshow("avg", norm_0_255(mean.reshape(1, db[0].rows)));
@@ -275,7 +281,17 @@ int main(int argc, const char *argv[]) {
 	Mat labelsMatrix(labels, true);
 	
 	//cout << "matrix row "<<labelsMatrix.rows << endl;
-	TrainSVM(svm, eigenStuff, labelsMatrix, pca);
+	//TrainSVM(svm, eigenStuff, labelsMatrix, pca);
+	svm = SVM::create();
+	// edit: the params struct got removed,
+	// we use setter/getter now:
+	svm->setType(SVM::C_SVC);
+	svm->setKernel(SVM::LINEAR);
+	svm->setGamma(3);
+
+	//	Mat trainData; // one row per feature
+	svm->train(eigenStuff, ROW_SAMPLE, labels);
+	
 	svm->save("emotionRecognition.xml");
 
 	VideoCapture cap(0);
