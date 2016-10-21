@@ -40,7 +40,7 @@ if __name__ == "__main__":
         for subdirname in dirnames:
             subject_path = os.path.join(dirname, subdirname)
             for filename in os.listdir(subject_path):
-                abs_path = "%s/%s" % (subject_path, filename)
+                abs_path = "%s\\%s" % (subject_path, filename)
                 file.write ("%s%s%d\n" % (abs_path, SEPARATOR, label))
             label = label + 1
 

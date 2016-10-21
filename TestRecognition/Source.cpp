@@ -21,6 +21,7 @@
 #include <opencv2/ml/ml.hpp>
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/objdetect/objdetect.hpp"
+#include "opencv2/face.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -30,8 +31,9 @@
 using namespace cv;
 using namespace std;
 using namespace ml;
+using namespace cv::face;
 
-string face_cascade_name = "C:/OpenCV/opencv/sources/data/haarcascades/haarcascade_frontalface_alt2.xml";
+string face_cascade_name = "C:/OpenCV/opencvWithContrib/source/opencv-master/data/haarcascades/haarcascade_frontalface_alt2.xml";
 CascadeClassifier face_cascade;
 bool detected = false;
 
@@ -122,12 +124,14 @@ void TrainSVM(Ptr<SVM>& svm, Mat trainData, Mat labels, PCA pca) {
 	// edit: the params struct got removed,
 	// we use setter/getter now:
 	svm->setType(SVM::C_SVC);
-	svm->setKernel(SVM::LINEAR);
-	svm->setGamma(3);
-
+	svm->setKernel(SVM::SIGMOID);
+	svm->setGamma(1);
+	//svm->setC(pow(2,-3));
+	//svm->setDegree(3);
+	svm->setCoef0(3);
 	//	Mat trainData; // one row per feature
 	svm->train(trainData, ROW_SAMPLE, labels);
-	
+	cout << svm->getKernelType() << "kernel" << endl;
 }
 
 bool fexists(const char *filename)
@@ -170,7 +174,7 @@ Mat detectFace(Mat im, Mat frame, Mat& cropped)
 	if (faces.size() == 0)
 		return frame;
 
-	Size deltaSize(largest.width * 0.2f, largest.height * 0.2f); // 0.1f = 10/100
+	Size deltaSize(largest.width * 0.15f, largest.height * 0.15f); // 0.1f = 10/100
 	Point offset(deltaSize.width / 2, deltaSize.height / 2);
 	largest -= deltaSize;
 	largest += offset;
@@ -191,20 +195,22 @@ Mat detectFace(Mat im, Mat frame, Mat& cropped)
 	return frame;
 }
 string getEmotion(int ans) {
+	cout << "----" << ans << endl;
 	switch (ans) {
-	case 7:return "neutral";
-	case 0:return "anger";
-	case 1:return "disgust";
-	case 2:return "fear";
-	case 3:return "happy";
-	case 4:return "sad";
-	case 5:return "surprise";
+	case 0:return "neutral";
+	case 1:return "anger";
+	case 2:return "disgust";
+	case 3:return "fear";
+	case 4:return "happy";
+	case 5:return "sad";
+	case 6:return "surprise";
 	default:return"nothing";
 	}
+	
+	
 }
 void recognizeEmotion(Mat f, PCA& pca, int num_components, Ptr<SVM>& svm,vector<Mat> db) {
-	Mat re(1, num_components, CV_32FC1);
-	
+	Mat re;
 	vector<Mat> temp;
 	temp.push_back(f);
 	Mat frameMatrix = asRowMatrix(temp, CV_32FC1);
@@ -214,19 +220,34 @@ void recognizeEmotion(Mat f, PCA& pca, int num_components, Ptr<SVM>& svm,vector<
 		Mat frame = frameMatrix.row(i);
 		if (frame.empty())
 			cout << "EMPTY--------------------" << endl;
-		//Size s(200, 200);
-		//resize(frame, frame, s);
-		//frame = frame.reshape(1, 1);
 		frame.convertTo(frame, CV_32FC1);
-		//cout << "input frame length: " << frame.rows << "--" << frame.cols << endl;
 		pca.project(frame, re);
-		//imshow("avg", re.reshape(1, db[0].));
-		//imshow("pc1", norm_0_255(pca.eigenvectors.row(pca.eigenvectors.rows-1)).reshape(1, db[0].rows));
+		//imshow("pc1", norm_0_255(re).reshape(1, db[0].rows));
 		int ans = svm->predict(re);
 		cout << i << " This photo is person " << getEmotion(ans) << endl;
 		
 	}
 	
+}
+void recognizeEmotionRec(Mat f, int num_components, Ptr<FaceRecognizer>& fcr, vector<Mat> db) {
+	Mat re;
+	vector<Mat> temp;
+	temp.push_back(f);
+	Mat frameMatrix = asRowMatrix(temp, CV_32FC1);
+	for (int i = 0; i < frameMatrix.rows; i++)
+	{
+
+		Mat frame = frameMatrix.row(i);
+		if (frame.empty())
+			cout << "EMPTY--------------------" << endl;
+		frame.convertTo(frame, CV_32FC1);
+		
+		//imshow("pc1", norm_0_255(re).reshape(1, db[0].rows));
+		int ans = fcr->predict(frame);
+		cout << i << " This photo is person " << getEmotion(ans) << endl;
+
+	}
+
 }
 void generatePCA(PCA&pca, vector<Mat>db,int num_components,Mat& data, Mat& eigenStuff) {
 	for (int i = 0; i < db.size(); i++) {
@@ -255,50 +276,38 @@ int main(int argc, const char *argv[]) {
 
 	// Build a matrix with the observations in row:
 	Mat data = asRowMatrix(db, CV_32FC1);
-	cout << "data col" << data.cols << endl;
 	// Number of components to keep for the PCA:
 	int num_components = 10;
 
 	// Perform a PCA:
 	PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, num_components);
 	Ptr<SVM> svm;
-	//svm->setType(SVM::C_SVC);
-	//svm->setKernel(SVM::LINEAR);
-	//cout << "----SVM:"<<svm->SVM::getKernelType() << endl;
 	Mat eigenStuff(data.rows, num_components, CV_32FC1); //This Mat will contain all the Eigenfaces that will be used later with SVM for detection
-	cout << eigenStuff.rows << " rows" << endl;
+	cout << eigenStuff.row(0).col(0) << " rows" << endl;
 	//cout << "rows" << data.rows << "eigenCol" << eigenStuff.cols << endl;
 	generatePCA(pca, db, num_components, data, eigenStuff);
-	cout << eigenStuff.rows <<" rows"<< endl;
+	cout << eigenStuff.row(0).col(0) << " rowsAFTER" << endl;
 	//pca = load("pca.xml", pca);
 	// The mean face:
 	//imshow("avg", norm_0_255(mean.reshape(1, db[0].rows)));
 	//cout << "number: "<< eigenvalues.rows<<endl;
 	//cout << "numberLabels: " << labels.size()<< endl;
 	//cout << "numberColumns: " << eigenvalues.cols << endl;
-
+	//Ptr<FaceRecognizer> model = createFisherFaceRecognizer(10,10);
+	//cout << data.rows << "==" << labels.size()<<"=="<<db.size() << endl;
+	//model->train(db, labels);
 	//create svm
 	Mat labelsMatrix(labels, true);
 	
 	//cout << "matrix row "<<labelsMatrix.rows << endl;
-	//TrainSVM(svm, eigenStuff, labelsMatrix, pca);
-	svm = SVM::create();
-	// edit: the params struct got removed,
-	// we use setter/getter now:
-	svm->setType(SVM::C_SVC);
-	svm->setKernel(SVM::LINEAR);
-	svm->setGamma(3);
-
-	//	Mat trainData; // one row per feature
-	svm->train(eigenStuff, ROW_SAMPLE, labels);
-	
-	svm->save("emotionRecognition.xml");
-
+	TrainSVM(svm, eigenStuff, labelsMatrix, pca);
+	cout << eigenStuff.rows << " == " << labelsMatrix.rows << endl;
 	VideoCapture cap(0);
 	if (!cap.isOpened()) {
 		return -1;
 	}
-	clock_t start = clock(); cout << clock()/CLOCKS_PER_SEC<< endl;
+	clock_t start = clock(); 
+	cout << clock()/CLOCKS_PER_SEC <<"-- clock"<< endl;
 	//Mat imgs = asRowMatrix(db, CV_32FC1);
 	while (waitKey(15) != 'q') {
 		Mat frame;
@@ -306,8 +315,12 @@ int main(int argc, const char *argv[]) {
 		cap >> frame;
 
 		if (!frame.empty()) {
+			flip(frame, frame,1);
+			Mat orig = frame;
+
 			cvtColor(frame, frame, CV_BGR2GRAY);
 			equalizeHist(frame, frame);
+			
 			//frame = frame.reshape(1, 1);
 			//imgs.push_back(inp);
 			//frame.convertTo(frame, CV_32F);
@@ -324,8 +337,9 @@ int main(int argc, const char *argv[]) {
 			if (!cropped.empty()) {
 				imshow("cr", cropped);
 				recognizeEmotion(cropped, pca, num_components, svm, db);
+				//recognizeEmotionRec(cropped, num_components, model, db);
 			}
-			
+			cout << "record" << endl;
 			//int deltaTime = (clock() / CLOCKS_PER_SEC - start/ CLOCKS_PER_SEC) ;
 			//if (deltaTime%3==0  ) {
 				//detected = true;
@@ -338,7 +352,7 @@ int main(int argc, const char *argv[]) {
 
 			
 
-			imshow("final", frame);
+			imshow("final", orig);
 		}
 		
 
