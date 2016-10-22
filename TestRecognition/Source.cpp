@@ -124,8 +124,8 @@ void TrainSVM(Ptr<SVM>& svm, Mat trainData, Mat labels, PCA pca) {
 	// edit: the params struct got removed,
 	// we use setter/getter now:
 	svm->setType(SVM::C_SVC);
-	svm->setKernel(SVM::SIGMOID);
-	svm->setGamma(1);
+	svm->setKernel(SVM::LINEAR);
+	svm->setGamma(3);
 	//svm->setC(pow(2,-3));
 	//svm->setDegree(3);
 	svm->setCoef0(3);
@@ -174,7 +174,7 @@ Mat detectFace(Mat im, Mat frame, Mat& cropped)
 	if (faces.size() == 0)
 		return frame;
 
-	Size deltaSize(largest.width * 0.15f, largest.height * 0.15f); // 0.1f = 10/100
+	Size deltaSize(largest.width * 0.25f, largest.height * 0.25f); // 0.1f = 10/100
 	Point offset(deltaSize.width / 2, deltaSize.height / 2);
 	largest -= deltaSize;
 	largest += offset;
