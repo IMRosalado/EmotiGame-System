@@ -36,7 +36,7 @@ using namespace cv::face;
 string face_cascade_name = "C:/OpenCV/opencvWithContrib/source/opencv-master/data/haarcascades/haarcascade_frontalface_alt2.xml";
 CascadeClassifier face_cascade;
 bool detected = false;
-
+ofstream myfile;
 // Reads the images and labels from a given CSV file, a valid file would
 // look like this:
 //
@@ -125,10 +125,10 @@ void TrainSVM(Ptr<SVM>& svm, Mat trainData, Mat labels, PCA pca) {
 	// we use setter/getter now:
 	svm->setType(SVM::C_SVC);
 	svm->setKernel(SVM::LINEAR);
-	svm->setGamma(3);
-	//svm->setC(pow(2,-3));
+	//svm->setGamma(3);
+	////svm->setC(pow(2,-3));
 	//svm->setDegree(3);
-	svm->setCoef0(3);
+	//svm->setCoef0(3);
 	//	Mat trainData; // one row per feature
 	svm->train(trainData, ROW_SAMPLE, labels);
 	cout << svm->getKernelType() << "kernel" << endl;
@@ -174,8 +174,8 @@ Mat detectFace(Mat im, Mat frame, Mat& cropped)
 	if (faces.size() == 0)
 		return frame;
 
-	Size deltaSize(largest.width * 0.25f, largest.height * 0.25f); // 0.1f = 10/100
-	Point offset(deltaSize.width / 2, deltaSize.height / 2);
+	Size deltaSize(largest.width * 0.2f, largest.height * 0.2f); // 0.1f = 10/100
+	Point offset(deltaSize.width / 1.5, deltaSize.height / 1.5);
 	largest -= deltaSize;
 	largest += offset;
 
@@ -249,14 +249,30 @@ void recognizeEmotionRec(Mat f, int num_components, Ptr<FaceRecognizer>& fcr, ve
 	}
 
 }
-void generatePCA(PCA&pca, vector<Mat>db,int num_components,Mat& data, Mat& eigenStuff) {
+void generatePCA(PCA&pca, vector<Mat>db,int num_components,Mat& data, Mat& eigenStuff, vector<int> labels) {
+	myfile << "Emotion" << ",";
+	for (int j = 0; j < num_components; j++) {
+		myfile << "EigenFace " << j + 1;
+		if (j < num_components - 1)
+			myfile << ",";
+	}
+	myfile << "\n";
 	for (int i = 0; i < db.size(); i++) {
+
+		
+
 		Mat projectedMat(1, num_components, CV_32FC1);
 		//cout << "image(" << i << ")" << data.row(i).cols << endl;
 		pca.project(data.row(i), projectedMat);
 		projectedMat.row(0).copyTo(eigenStuff.row(i));
+		myfile << getEmotion(labels[i]) << ",";
+		for (int j = 0; j < num_components; j++) {
+			myfile << eigenStuff.at<float>(i, j);
+			if (j < num_components - 1)
+				myfile << ",";
+		}
+		myfile << "\n";
 	}
-
 	// And copy the PCA results:
 	Mat mean = pca.mean.clone();
 	Mat eigenvalues = pca.eigenvalues.clone();
@@ -264,6 +280,9 @@ void generatePCA(PCA&pca, vector<Mat>db,int num_components,Mat& data, Mat& eigen
 	save("pca.xml", mean, eigenvalues, eigenvectors);
 }
 int main(int argc, const char *argv[]) {
+	
+	myfile.open("dataset.csv");
+
 	if (!face_cascade.load(face_cascade_name)) {
 		printf("--(!)Error loading\n");
 		return (-1);
@@ -277,7 +296,7 @@ int main(int argc, const char *argv[]) {
 	// Build a matrix with the observations in row:
 	Mat data = asRowMatrix(db, CV_32FC1);
 	// Number of components to keep for the PCA:
-	int num_components = 10;
+	int num_components = 30;
 
 	// Perform a PCA:
 	PCA pca(data, Mat(), CV_PCA_DATA_AS_ROW, num_components);
@@ -285,7 +304,7 @@ int main(int argc, const char *argv[]) {
 	Mat eigenStuff(data.rows, num_components, CV_32FC1); //This Mat will contain all the Eigenfaces that will be used later with SVM for detection
 	cout << eigenStuff.row(0).col(0) << " rows" << endl;
 	//cout << "rows" << data.rows << "eigenCol" << eigenStuff.cols << endl;
-	generatePCA(pca, db, num_components, data, eigenStuff);
+	generatePCA(pca, db, num_components, data, eigenStuff,labels);
 	cout << eigenStuff.row(0).col(0) << " rowsAFTER" << endl;
 	//pca = load("pca.xml", pca);
 	// The mean face:
@@ -339,22 +358,21 @@ int main(int argc, const char *argv[]) {
 				recognizeEmotion(cropped, pca, num_components, svm, db);
 				//recognizeEmotionRec(cropped, num_components, model, db);
 			}
-			cout << "record" << endl;
-			//int deltaTime = (clock() / CLOCKS_PER_SEC - start/ CLOCKS_PER_SEC) ;
-			//if (deltaTime%3==0  ) {
-				//detected = true;
-				//cout << deltaTime << endl;
-				//if (!cropped.empty())
-				//	recognizeEmotion(cropped, pca, num_components, svm, db);
-				//else
-				//	cout << "no face" << endl;
-			//}
+			/*int deltaTime = (clock() / CLOCKS_PER_SEC - start/ CLOCKS_PER_SEC) ;
+			if (deltaTime%3==0  ) {
+				detected = true;
+				cout << deltaTime << endl;
+				if (!cropped.empty())
+					recognizeEmotion(cropped, pca, num_components, svm, db);
+				else
+					cout << "no face" << endl;
+			}*/
 
 			
 
 			imshow("final", orig);
 		}
-		
+		myfile.close();
 
 
 	}
